@@ -1,6 +1,5 @@
 import gradio as gr
 import mido
-from pydub import AudioSegment
 import tempfile
 import os
 from midi_utilities import create_midi_from_timings, get_midi_notes
