@@ -11,6 +11,13 @@ import torch
 from sklearn.decomposition import PCA
 import gc
 
+if not os.path.exists("./temp"):
+    os.makedirs("./temp")
+if not os.path.exists("./checkpoint"):
+    os.makedirs("./checkpoint")
+if not os.path.exists("./generation_outputs"):
+    os.makedirs("./generation_outputs") 
+  
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 tokenizer=MusicalTokenizer(notes=128, 
                            time_shifts=125, 
