@@ -5,3 +5,4 @@ mido
 gradio
 tqdm
 scikit-learn
+scipy
