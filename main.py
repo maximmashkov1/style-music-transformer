@@ -7,7 +7,7 @@ from model import *
 from tqdm import tqdm
 from tokenizer import MusicalTokenizer
 import torch
-from sklearn.decomposition import PCA
+from scipy.linalg import eigh
 import gc
 
 if not os.path.exists("./temp"):
@@ -43,55 +43,44 @@ LAST_GENERATED = None
 MULTIPLE_STYLES = False
 
 def plot_l2_distance_min():
-    
     model.eval()
+    
     if len(FILES) < 3:
         return None
-
-    style_sequences, _ = get_selected_style_and_primer()
     
+    style_sequences, _ = get_selected_style_and_primer()
     x = model.compute_style_tokens(torch.stack(style_sequences).to(DEVICE)).flatten(start_dim=1).detach().to('cpu')
+    
     x = x / torch.max(x)
     
-
-    best_embedding=None
-    distances = torch.cdist(x, x) 
-    best_error=999
-
-    for tries in range(10):
-        embedding = nn.Parameter(torch.randn(x.size(0), 2))  
-        optimizer = optim.SGD([embedding], lr=0.2) 
-        
-        for i in range(100):
-            optimizer.zero_grad()
-            distances_2d = torch.cdist(embedding, embedding)
-            
-            loss = torch.nn.functional.mse_loss(distances_2d, distances)
-            loss.backward(retain_graph=True)
-            if i == 99 and loss.item() < best_error:
-                best_embedding=embedding.detach().clone()
-            
-
-            optimizer.step()
-            for param_group in optimizer.param_groups:
-                param_group['lr']*=0.97 
-
-    x_2d = best_embedding.detach().cpu().numpy()
+    distances = torch.cdist(x, x).numpy()  
+    n = distances.shape[0]
+    D_squared = distances ** 2
+    H = np.eye(n) - (1 / n) * np.ones((n, n))
+    B = -0.5 * H @ D_squared @ H 
+    
+    eigvals, eigvecs = eigh(B) 
+    
+    top_2_eigvals = eigvals[-2:] 
+    top_2_eigvecs = eigvecs[:, -2:]  
+    
+    X_2D = top_2_eigvecs * np.sqrt(top_2_eigvals)
     
     plt.figure(figsize=(8, 8))
-    plt.scatter(x_2d[:, 0], x_2d[:, 1], c='yellow', edgecolor='k', s=100)
+    plt.scatter(X_2D[:, 0], X_2D[:, 1], c='yellow', edgecolor='k', s=100)
     for i, name in enumerate(NAMES):
-        plt.text(x_2d[i, 0] -0.5, x_2d[i, 1] + 0.05, name, fontsize=11)
-
-    plt.title("Pairwise L2-minimized 2D plot of style vectors")
+        plt.text(X_2D[i, 0] - 0.5, X_2D[i, 1] + 0.05, name, fontsize=11)
+    
+    plt.title("Pairwise L2-MDS 2D Plot of Style Vectors")
     plt.grid(True)
     plt.savefig('./temp/l2_plot.png')
     plt.close('all')
-    del x, x_2d, distances, distances_2d, style_sequences, loss 
-    del embedding, optimizer 
+    
+    del x, X_2D, distances, B, D_squared, eigvals, eigvecs, top_2_eigvals, top_2_eigvecs
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+    
     return './temp/l2_plot.png'
 
 
