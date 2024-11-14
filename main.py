@@ -114,8 +114,7 @@ def generate_midi(progress=gr.Progress()):
     for _ in progress.tqdm(range(LENGTH+1), desc="Generating"):
         try:
             iter_.__next__()
-        except Exception as e:
-            print(e)
+        except StopIteration as e:
             pass
     out = model.generation_result
     
