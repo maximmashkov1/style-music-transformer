@@ -218,7 +218,7 @@ class MusicTransformer(nn.Module):
     @torch.inference_mode()
     def generate(self, style_sequence=None, start_with=None, temperature=1.0, top_k=20, max_length=512):
         self.eval()
-    
+        self.generation_result = None
         if style_sequence is not None:
             if type(style_sequence) == list:
                 style_token = self.compute_style_tokens(style_sequence[0].unsqueeze(0).to(self.device))
@@ -239,26 +239,12 @@ class MusicTransformer(nn.Module):
             x = torch.tensor([self.tokenizer.vocab.index('<start>')]).unsqueeze(0).to(self.device) #start token
     
         start_idx = start_with.shape[0]-1 if start_with is not None else 0
-
-
-        def update_cache(x):
-            self.reset_kv_cache()
-            cache_update_sequence = x[:, -3*self.seq_length//4:-1]
-            self.forward(cache_update_sequence, style_tokens=style_token) #shift context, liberating 1/4th
-            cache_size = cache_update_sequence.shape[1]
-            return cache_size
-            
-        cache_size=update_cache(x)
-        
+        self.reset_kv_cache()
+        self.forward(x[:, :-1], style_token)
         for i in range(start_idx, max_length):
             
-            if cache_size >= self.seq_length: #handles long sequences
-                cache_size=update_cache(x)
-
-
             logits = self.forward(x[:, -1:], style_tokens=None)[0, -1, :]
-            cache_size+=1
-            
+
             logits_remove_mask = torch.zeros_like(logits, dtype=torch.bool).to(logits.device)
     
             logits_remove_mask[[0, -1, -2]] = 1
@@ -273,10 +259,11 @@ class MusicTransformer(nn.Module):
             next_token = torch.multinomial(probabilities, 1)
     
             x = torch.cat((x, torch.tensor([next_token]).unsqueeze(0).to(self.device)), dim=-1) 
+            if i == max_length-1:
+                self.generation_result = x
             yield
     
         self.train()
-        self.generation_result = x
         return
 
 
